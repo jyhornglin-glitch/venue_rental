@@ -932,83 +932,68 @@
 
     <!-- 導航分頁 -->
     <nav class="tab-nav">
-      <button id="bookingTabBtn" class="tab-btn active" onclick="switchTab('bookingTab', this)">📅 場地預約與租用現況</button>
+      <button id="bookingTabBtn" class="tab-btn active" onclick="switchTab('bookingTab', this)">📅 場地租用查詢與現況</button>
       <button id="venueShowcaseTabBtn" class="tab-btn" onclick="switchTab('venueShowcaseTab', this)">🏛️ 道場空間簡介與設施</button>
       <button id="venueManageTabBtn" class="tab-btn" style="display:none;" onclick="switchTab('venueManageTab', this)">🏢 道場空間管理 (志工維護)</button>
       <button id="userManageTabBtn" class="tab-btn" style="display:none;" onclick="switchTab('userManageTab', this)">👥 志工人員權限</button>
     </nav>
 
-    <!-- 分頁一：場地借用申請與租用現況清單 -->
+    <!-- 分頁一：場地租用現況與排程查詢 (預設主介面) -->
     <div id="bookingTab" class="tab-content active">
-      <div class="main-grid">
-        <section class="card">
-          <h2 class="card-title">新增場地借用申請</h2>
+      <section class="card">
+        <div class="card-title" style="flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:1.15rem; font-weight:700;">📅 道場場地借用排程查詢</span>
+          </div>
+          <button class="btn-submit" style="width:auto; padding:8px 18px; font-size:0.92rem; margin:0; display:inline-flex; align-items:center; gap:6px;" onclick="openBookingModal()">
+            ✍️ 我要申請借用場地
+          </button>
+        </div>
 
-          <!-- 訪客瀏覽模式提示橫幅 -->
-          <div id="visitorFormNotice" style="display:none; background:var(--tzuchi-blue-light); border:1px solid #bfdbfe; color:#1e3a8a; border-radius:8px; padding:10px 14px; font-size:0.86rem; margin-bottom:14px; line-height:1.5;">
-            ℹ️ <strong>訪客檢視模式</strong>：您可自由查閱道場空間與右側租借日程。若欲提交預約申請，請點選 <a href="javascript:void(0)" onclick="toggleAuthModal(true)" style="color:var(--tzuchi-blue); font-weight:700; text-decoration:underline;">合十登入</a>。
+        <!-- 查詢篩選控制列 -->
+        <div class="query-toolbar" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; margin-bottom:18px; display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label for="resVenueFilter" style="font-size:0.88rem; font-weight:600; color:#475569; white-space:nowrap;">🏛️ 道場空間：</label>
+            <select id="resVenueFilter" class="form-control" style="width:auto; min-width:140px; font-size:0.88rem; padding:6px 12px;" onchange="loadReservations()">
+              <option value="">全部道場空間</option>
+            </select>
           </div>
 
-          <form id="bookingForm" onsubmit="handleBookingSubmit(event)">
-            <div class="form-group">
-              <label for="venueSelect">預約借用空間</label>
-              <select id="venueSelect" class="form-control" required>
-                <option value="" disabled selected>載入可用道場空間中...</option>
-              </select>
-            </div>
-
-            <!-- 垂直全寬排版，確保中文字元與日曆選單充裕不重疊 -->
-            <div class="form-group">
-              <label for="startTimeInput">借用開始時間</label>
-              <input type="datetime-local" id="startTimeInput" class="form-control" required>
-            </div>
-
-            <div class="form-group">
-              <label for="endTimeInput">借用結束時間</label>
-              <input type="datetime-local" id="endTimeInput" class="form-control" required>
-            </div>
-
-            <div class="form-group">
-              <label for="reasonInput">借用事由 / 活動共修名稱</label>
-              <textarea id="reasonInput" class="form-control" placeholder="例: 社區讀書會、志工培訓研討、環保組會議、人文品茗共修" rows="3"></textarea>
-            </div>
-
-            <button type="submit" id="submitBtn" class="btn-submit">
-              <span id="submitBtnText">送出借用申請</span>
-            </button>
-          </form>
-        </section>
-
-        <section class="card">
-          <div class="card-title">
-            <span>場地租用現況與排程</span>
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <select id="resVenueFilter" class="form-control" style="width:auto; min-width:130px; font-size:0.85rem; padding:6px 10px;" onchange="loadReservations()">
-                <option value="">全部道場空間</option>
-              </select>
-              <button class="btn-secondary" style="padding:6px 12px; font-size:0.85rem;" onclick="loadReservations()">重新整理</button>
-            </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label for="resDateFilter" style="font-size:0.88rem; font-weight:600; color:#475569; white-space:nowrap;">📅 預約日期：</label>
+            <input type="date" id="resDateFilter" class="form-control" style="width:auto; font-size:0.88rem; padding:5px 10px;" onchange="onDateInputChange()">
           </div>
 
-          <!-- 訪客瀏覽模式提示橫幅 -->
-          <div id="visitorResNotice" style="display:none; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:9px 13px; font-size:0.85rem; color:#0369a1; margin-bottom:14px; line-height:1.5;">
-            🌐 <strong>訪客瀏覽中</strong>：以下為各道場空間已核准之租用時段與活動排程（個資已受隱私去識別化保護）。
+          <!-- 快捷日期標籤 -->
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button type="button" class="scope-pill-btn active" id="quickDateAll" onclick="setQuickDate('')">全部日期</button>
+            <button type="button" class="scope-pill-btn" id="quickDateToday" onclick="setQuickDate('today')">今天</button>
+            <button type="button" class="scope-pill-btn" id="quickDateTomorrow" onclick="setQuickDate('tomorrow')">明天</button>
           </div>
 
-          <!-- 已登入使用者的檢視範圍切換 (全部租用現況 vs 我的預約紀錄) -->
-          <div id="resScopeFilterBar" style="display:none; margin-bottom:14px; gap:8px;">
-            <button class="scope-pill-btn active" id="scopeAllBtn" onclick="setReservationScope('all')">全道場租用排程</button>
-            <button class="scope-pill-btn" id="scopeMyBtn" onclick="setReservationScope('my')">我的預約紀錄</button>
+          <div style="margin-left:auto; display:flex; gap:8px;">
+            <button class="btn-secondary" style="padding:6px 14px; font-size:0.88rem;" onclick="loadReservations()">🔄 重新整理</button>
           </div>
+        </div>
 
-          <div id="reservationContainer">
-            <div class="loading-state">
-              <div class="spinner"></div>
-              <div>載入預約清單中...</div>
-            </div>
+        <!-- 訪客瀏覽模式提示橫幅 -->
+        <div id="visitorResNotice" style="display:none; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:10px 14px; font-size:0.86rem; color:#0369a1; margin-bottom:16px; line-height:1.5;">
+          🌐 <strong>訪客瀏覽中</strong>：以下為各道場空間已核准之租用時段與活動排程（個資已受隱私去識別化保護）。若欲提交借用申請，請點選右上角「✍️ 我要申請借用場地」。
+        </div>
+
+        <!-- 已登入使用者的檢視範圍切換 (全部租用現況 vs 我的預約紀錄) -->
+        <div id="resScopeFilterBar" style="display:none; margin-bottom:14px; gap:8px;">
+          <button class="scope-pill-btn active" id="scopeAllBtn" onclick="setReservationScope('all')">全道場租用排程</button>
+          <button class="scope-pill-btn" id="scopeMyBtn" onclick="setReservationScope('my')">我的預約紀錄</button>
+        </div>
+
+        <div id="reservationContainer">
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <div>載入預約清單中...</div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </div>
 
     <!-- 分頁：道場空間簡介與設施 (全體/訪客皆可瀏覽) -->
@@ -1220,6 +1205,41 @@
         </div>
         <button type="submit" id="addClosureBtn" class="btn-submit" style="margin-top:10px;">加入限定停用時段</button>
         <button type="button" class="btn-secondary" style="width:100%; margin-top:8px;" onclick="closeClosureModal()">完成並關閉</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 借用申請 Modal -->
+  <div id="bookingModal" class="modal-overlay" onclick="if(event.target === this) closeBookingModal()">
+    <div class="modal-card">
+      <h3 style="margin-bottom: 14px;">✍️ 填寫場地借用申請</h3>
+      <form id="bookingForm" onsubmit="handleBookingSubmit(event)">
+        <div class="form-group">
+          <label for="venueSelect">預約借用空間</label>
+          <select id="venueSelect" class="form-control" required>
+            <option value="" disabled selected>載入可用道場空間中...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="startTimeInput">借用開始時間</label>
+          <input type="datetime-local" id="startTimeInput" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label for="endTimeInput">借用結束時間</label>
+          <input type="datetime-local" id="endTimeInput" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label for="reasonInput">借用事由 / 活動共修名稱</label>
+          <textarea id="reasonInput" class="form-control" placeholder="例: 社區讀書會、志工培訓研討、環保組會議、人文品茗共修" rows="3"></textarea>
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn-submit" style="margin-top: 14px;">
+          <span id="submitBtnText">送出借用申請</span>
+        </button>
+        <button type="button" class="btn-secondary" style="width: 100%; margin-top: 8px;" onclick="closeBookingModal()">關閉</button>
       </form>
     </div>
   </div>
@@ -1532,15 +1552,84 @@
     }
 
     function selectVenueForBooking(venueId) {
-      switchTab('bookingTab', document.getElementById('bookingTabBtn'));
-      const sel = document.getElementById('venueSelect');
-      if (sel) sel.value = venueId;
       if (!currentUser.is_authenticated) {
         showAlert(' 訪客借用提醒：請先合十登入後再進行場地申請。');
         toggleAuthModal(true);
       } else {
-        document.getElementById('startTimeInput')?.focus();
+        openBookingModal(venueId);
       }
+    }
+
+    function openBookingModal(venueId) {
+      if (!currentUser.is_authenticated) {
+        showAlert('ℹ️ 欲進行場地申請，請先合十登入。');
+        toggleAuthModal(true);
+        return;
+      }
+      initDefaultTimes();
+      if (venueId) {
+        const sel = document.getElementById('venueSelect');
+        if (sel) sel.value = venueId;
+      }
+      const modal = document.getElementById('bookingModal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeBookingModal() {
+      const modal = document.getElementById('bookingModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function onDateInputChange() {
+      const input = document.getElementById('resDateFilter');
+      const allBtn = document.getElementById('quickDateAll');
+      const todayBtn = document.getElementById('quickDateToday');
+      const tmrBtn = document.getElementById('quickDateTomorrow');
+      [allBtn, todayBtn, tmrBtn].forEach(b => b?.classList.remove('active'));
+
+      if (!input?.value) {
+        allBtn?.classList.add('active');
+      } else {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${yyyy}-${mm}-${dd}`;
+        if (input.value === todayStr) {
+          todayBtn?.classList.add('active');
+        }
+      }
+      loadReservations();
+    }
+
+    function setQuickDate(type) {
+      const input = document.getElementById('resDateFilter');
+      const allBtn = document.getElementById('quickDateAll');
+      const todayBtn = document.getElementById('quickDateToday');
+      const tmrBtn = document.getElementById('quickDateTomorrow');
+
+      [allBtn, todayBtn, tmrBtn].forEach(b => b?.classList.remove('active'));
+
+      if (!type) {
+        if (input) input.value = '';
+        allBtn?.classList.add('active');
+      } else if (type === 'today') {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        if (input) input.value = `${yyyy}-${mm}-${dd}`;
+        todayBtn?.classList.add('active');
+      } else if (type === 'tomorrow') {
+        const tmr = new Date();
+        tmr.setDate(tmr.getDate() + 1);
+        const yyyy = tmr.getFullYear();
+        const mm = String(tmr.getMonth() + 1).padStart(2, '0');
+        const dd = String(tmr.getDate()).padStart(2, '0');
+        if (input) input.value = `${yyyy}-${mm}-${dd}`;
+        tmrBtn?.classList.add('active');
+      }
+      loadReservations();
     }
 
     // 載入預約/租借排程清單
@@ -1550,9 +1639,12 @@
 
       const filter = document.getElementById('resVenueFilter');
       const venueId = filter ? filter.value : '';
+      const dateInput = document.getElementById('resDateFilter');
+      const dateVal = dateInput ? dateInput.value : '';
 
       let url = '/api/reservations/?';
       if (venueId) url += 'venue_id=' + encodeURIComponent(venueId) + '&';
+      if (dateVal) url += 'date=' + encodeURIComponent(dateVal) + '&';
       if (currentUser.is_authenticated && currentReservationScope) {
         url += 'scope=' + encodeURIComponent(currentReservationScope) + '&';
       }
@@ -1565,9 +1657,14 @@
         }
         const list = await res.json();
         if (!list || list.length === 0) {
-          const emptyMsg = (!currentUser.is_authenticated || currentReservationScope === 'all')
-            ? '🌿 目前尚無已核准的場地借用排程，空間充裕，歡迎預約使用。'
-            : '您目前尚無借用申請紀錄。若有需要，歡迎填寫左側表單進行預約。';
+          let emptyMsg = '🌿 目前尚無符合條件的場地借用排程。';
+          if (dateVal) {
+            emptyMsg = `🌿 ${dateVal} 當日尚無預約借用排程，該日道場空間充裕，歡迎預約使用。`;
+          } else if (!currentUser.is_authenticated || currentReservationScope === 'all') {
+            emptyMsg = '🌿 目前尚無已核准的場地借用排程，空間充裕，歡迎預約使用。';
+          } else {
+            emptyMsg = '您目前尚無借用申請紀錄。點選右上角「✍️ 我要申請借用場地」即可提交預約。';
+          }
           container.innerHTML = `<div class="empty-state"><p>${emptyMsg}</p></div>`;
           return;
         }
@@ -1656,6 +1753,7 @@
           showAlert(` 感恩！單號 #${data.id}（${data.venue_name}）借用申請已提交，將由場地窗口進行審核。`);
           document.getElementById('bookingForm').reset();
           initDefaultTimes();
+          closeBookingModal();
           loadReservations();
         } else {
           let errMsg = data.detail || '申請失敗';

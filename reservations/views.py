@@ -473,14 +473,29 @@ def reservation_list_create_api(request):
     if request.method == "GET":
         venue_id = request.GET.get('venue_id')
         scope = request.GET.get('scope')  # 'all', 'public', 'my', 'approved', 'pending'
+        date_str = request.GET.get('date')  # 'YYYY-MM-DD'
+
+        def apply_query_filters(qs):
+            if venue_id:
+                qs = qs.filter(venue_id=venue_id)
+            if date_str:
+                try:
+                    from datetime import datetime
+                    q_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    qs = qs.filter(
+                        start_time__date__lte=q_date,
+                        end_time__date__gte=q_date
+                    )
+                except ValueError:
+                    pass
+            return qs
 
         # 1. 未登入使用者 (訪客)：回傳公開場地租用資訊 (已核准之租用排程)
         if not user:
             reservations = Reservation.objects.filter(
                 status=Reservation.Status.APPROVED
             ).select_related('venue', 'user')
-            if venue_id:
-                reservations = reservations.filter(venue_id=venue_id)
+            reservations = apply_query_filters(reservations)
 
             data = [
                 {
@@ -505,12 +520,11 @@ def reservation_list_create_api(request):
         # 2. 已登入使用者
         if role_info['is_admin_or_superadmin']:
             reservations = Reservation.objects.all().select_related('venue', 'user')
-            if venue_id:
-                reservations = reservations.filter(venue_id=venue_id)
             if scope == 'approved':
                 reservations = reservations.filter(status=Reservation.Status.APPROVED)
             elif scope == 'pending':
                 reservations = reservations.filter(status=Reservation.Status.PENDING)
+            reservations = apply_query_filters(reservations)
         else:
             # 一般申請者
             if scope in ('all', 'public'):
@@ -521,9 +535,7 @@ def reservation_list_create_api(request):
             else:
                 # 預設看自己的預約紀錄
                 reservations = Reservation.objects.filter(user=user).select_related('venue', 'user')
-
-            if venue_id:
-                reservations = reservations.filter(venue_id=venue_id)
+            reservations = apply_query_filters(reservations)
 
         data = [
             {

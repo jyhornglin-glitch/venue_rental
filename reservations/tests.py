@@ -372,4 +372,16 @@ class FullSystemIntegrationTests(TestCase):
         )
         self.assertEqual(res_book_unauth.status_code, 401)
 
+        # 9. 訪客按日期篩選租用資訊
+        target_date_str = timezone.localdate(approved_res.start_time).strftime('%Y-%m-%d')
+        res_date_match = self.client.get(f'/api/reservations/?date={target_date_str}')
+        self.assertEqual(res_date_match.status_code, 200)
+        self.assertEqual(len(res_date_match.json()), 1)
+
+        other_date_str = (now + timedelta(days=10)).strftime('%Y-%m-%d')
+        res_date_miss = self.client.get(f'/api/reservations/?date={other_date_str}')
+        self.assertEqual(res_date_miss.status_code, 200)
+        self.assertEqual(len(res_date_miss.json()), 0)
+
+
 
