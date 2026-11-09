@@ -20,7 +20,8 @@ urlpatterns = [
     path('api/reservations/', views.reservation_list_create_api, name='api_reservations'),
     path('api/reservations/<int:pk>/', views.reservation_detail_patch_api, name='api_reservation_detail'),
 
-    # 人員角色管理 API (最高管理者/管理者)
+    # 人員角色管理 API (最高管理者/管理者，支援完整 CRUD 操作，除 admin 受保護除外)
     path('api/users/', views.user_list_create_api, name='api_users'),
+    path('api/users/<int:pk>/', views.user_detail_update_delete_api, name='api_user_detail'),
     path('api/users/<int:pk>/role/', views.user_role_update_api, name='api_user_role_update'),
 ]

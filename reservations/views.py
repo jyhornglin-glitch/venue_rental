@@ -693,7 +693,7 @@ def reservation_detail_patch_api(request, pk):
 
 
 # -------------------------------------------------------------
-# 人員管理 API (最高管理者 / 管理者)
+# 人員管理 API (最高管理者 / 管理者，支援完整 CRUD 操作，除 admin 受保護除外)
 # -------------------------------------------------------------
 
 @csrf_exempt
@@ -717,13 +717,17 @@ def user_list_create_api(request):
         data = []
         for u in users:
             u_role = get_user_role_info(u)
+            is_admin_protected = (u.username.lower() == 'admin' or u.is_superuser)
+            phone = u.profile.phone if hasattr(u, 'profile') else ''
             data.append({
                 "id": u.id,
                 "username": u.username,
                 "email": u.email,
+                "phone": phone,
                 "role": u_role['role'],
                 "role_display": u_role['role_display'],
                 "is_active": u.is_active,
+                "is_admin_protected": is_admin_protected,
                 "date_joined": u.date_joined.isoformat()
             })
         return JsonResponse(data, safe=False, status=200)
@@ -746,6 +750,9 @@ def user_list_create_api(request):
 
         if not username:
             return JsonResponse({"detail": "使用者帳號 (username) 不可為空白。"}, status=400)
+
+        if username.lower() == 'admin':
+            return JsonResponse({"detail": "帳號名稱 admin 為系統保留核心帳號，無法重複建立。"}, status=400)
 
         if not password:
             return JsonResponse({"detail": "使用者密碼 (password) 不可為空白。"}, status=400)
@@ -784,10 +791,170 @@ def user_list_create_api(request):
             "id": new_user.id,
             "username": new_user.username,
             "email": new_user.email,
+            "phone": profile.phone,
             "role": profile.role,
             "role_display": profile.get_role_display(),
+            "is_active": new_user.is_active,
+            "is_admin_protected": False,
             "message": f"人員「{new_user.username}」已成功建立，角色為：{profile.get_role_display()}。"
         }, status=201)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT", "PATCH", "DELETE"])
+def user_detail_update_delete_api(request, pk):
+    """
+    GET /api/users/<pk>/ - 取得單一人員詳細資料 (R)
+    PUT / PATCH /api/users/<pk>/ - 修改人員資料 (U - 帳號、信箱、電話、密碼、角色、狀態)
+    DELETE /api/users/<pk>/ - 刪除人員 (D - 除 admin 核心帳號受保護除外)
+    """
+    user = get_authenticated_user(request)
+    if not user:
+        return JsonResponse({"detail": "未授權存取，請先登入。"}, status=401)
+
+    role_info = get_user_role_info(user)
+
+    try:
+        target_user = User.objects.select_related('profile').get(pk=pk)
+    except User.DoesNotExist:
+        return JsonResponse({"detail": f"找不到編號為 #{pk} 的人員資料。"}, status=404)
+
+    target_role_info = get_user_role_info(target_user)
+    is_target_admin = (target_user.username.lower() == 'admin' or target_user.is_superuser)
+
+    # 1. GET: 檢視單一人員詳細資訊
+    if request.method == "GET":
+        if not (role_info['is_admin_or_superadmin'] or user.id == target_user.id):
+            return JsonResponse({"detail": "權限不足，無法檢視他人詳細資料。"}, status=403)
+
+        phone = target_user.profile.phone if hasattr(target_user, 'profile') else ''
+        return JsonResponse({
+            "id": target_user.id,
+            "username": target_user.username,
+            "email": target_user.email,
+            "phone": phone,
+            "role": target_role_info['role'],
+            "role_display": target_role_info['role_display'],
+            "is_active": target_user.is_active,
+            "is_superuser": target_user.is_superuser,
+            "is_staff": target_user.is_staff,
+            "is_admin_protected": is_target_admin,
+            "date_joined": target_user.date_joined.isoformat(),
+            "reservations_count": target_user.reservations.count()
+        }, status=200)
+
+    # 2. PUT / PATCH: 修改編輯人員資料 (最高管理者專屬)
+    if request.method in ["PUT", "PATCH"]:
+        if not role_info['is_superadmin']:
+            return JsonResponse({"detail": "權限不足，僅最高管理者可編輯人員資料。"}, status=403)
+
+        try:
+            payload = json.loads(request.body.decode('utf-8'))
+        except Exception:
+            return JsonResponse({"detail": "無效的 JSON 請求格式。"}, status=400)
+
+        new_username = payload.get("username")
+        new_email = payload.get("email")
+        new_phone = payload.get("phone")
+        new_password = payload.get("password")
+        new_role = payload.get("role")
+        new_is_active = payload.get("is_active")
+
+        # admin 核心帳號除外防護原則
+        if is_target_admin:
+            if new_username is not None and str(new_username).strip().lower() != 'admin':
+                return JsonResponse({"detail": "系統核心管理者 (admin) 帳號名稱受保護，不可變更。"}, status=400)
+            if new_is_active is False:
+                return JsonResponse({"detail": "系統核心管理者 (admin) 受保護，不可停用。"}, status=400)
+            if new_role is not None and new_role != UserProfile.Role.SUPERADMIN:
+                return JsonResponse({"detail": "系統核心管理者 (admin) 受保護，不可降級為非最高管理者角色。"}, status=400)
+
+        try:
+            with transaction.atomic():
+                # 更新 username (非 admin 帳號)
+                if new_username is not None and not is_target_admin:
+                    uname = str(new_username).strip()
+                    if not uname:
+                        return JsonResponse({"detail": "使用者帳號不可為空白。"}, status=400)
+                    if User.objects.filter(username=uname).exclude(pk=target_user.pk).exists():
+                        return JsonResponse({"detail": f"帳號名稱「{uname}」已被使用，請更換其他名稱。"}, status=400)
+                    target_user.username = uname
+
+                # 更新 email
+                if new_email is not None:
+                    target_user.email = str(new_email).strip()
+
+                # 更新 password (如果有填)
+                if new_password:
+                    pwd = str(new_password).strip()
+                    if len(pwd) < 4:
+                        return JsonResponse({"detail": "密碼長度至少需 4 個字元。"}, status=400)
+                    target_user.set_password(pwd)
+
+                # 更新 is_active (非 admin)
+                if new_is_active is not None and not is_target_admin:
+                    target_user.is_active = bool(new_is_active)
+
+                # 更新 role
+                profile, _ = UserProfile.objects.get_or_create(user=target_user)
+                if new_role is not None:
+                    if new_role not in [UserProfile.Role.SUPERADMIN, UserProfile.Role.ADMIN, UserProfile.Role.USER]:
+                        return JsonResponse({"detail": "無效的角色選項。"}, status=400)
+
+                    if not is_target_admin:
+                        profile.role = new_role
+                        if new_role == UserProfile.Role.SUPERADMIN:
+                            target_user.is_superuser = True
+                            target_user.is_staff = True
+                        elif new_role == UserProfile.Role.ADMIN:
+                            target_user.is_superuser = False
+                            target_user.is_staff = True
+                        else:
+                            target_user.is_superuser = False
+                            target_user.is_staff = False
+
+                # 更新 phone
+                if new_phone is not None:
+                    profile.phone = str(new_phone).strip()
+
+                target_user.save()
+                profile.save()
+        except Exception as e:
+            return JsonResponse({"detail": f"更新人員資料失敗: {str(e)}"}, status=500)
+
+        return JsonResponse({
+            "id": target_user.id,
+            "username": target_user.username,
+            "email": target_user.email,
+            "phone": profile.phone,
+            "role": profile.role,
+            "role_display": profile.get_role_display(),
+            "is_active": target_user.is_active,
+            "is_admin_protected": is_target_admin,
+            "message": f"人員「{target_user.username}」資料已成功更新。"
+        }, status=200)
+
+    # 3. DELETE: 刪除人員 (除 admin 核心帳號受保護除外)
+    if request.method == "DELETE":
+        if not role_info['is_superadmin']:
+            return JsonResponse({"detail": "權限不足，僅最高管理者可執行人員刪除操作。"}, status=403)
+
+        # 核心除外防護 1：admin 帳號除外保護
+        if is_target_admin:
+            return JsonResponse({"detail": "系統核心管理者帳號 (admin) 受最高保護，除外不可進行刪除操作。"}, status=400)
+
+        # 核心除外防護 2：無法刪除目前登入之帳號
+        if target_user.id == user.id:
+            return JsonResponse({"detail": "無法刪除當前登入之自身帳號。"}, status=400)
+
+        target_username = target_user.username
+        try:
+            with transaction.atomic():
+                target_user.delete()
+        except Exception as e:
+            return JsonResponse({"detail": f"刪除人員失敗: {str(e)}"}, status=500)
+
+        return JsonResponse({"detail": f"志工人員「{target_username}」已成功自系統刪除。"}, status=200)
 
 
 @csrf_exempt
@@ -795,7 +962,7 @@ def user_list_create_api(request):
 def user_role_update_api(request, pk):
     """
     PATCH /api/users/<pk>/role/ - 變更人員角色
-    權限：最高管理者專屬 (SUPERADMIN)
+    權限：最高管理者專屬 (SUPERADMIN)，除 admin 核心帳號不可降級除外
     """
     user = get_authenticated_user(request)
     if not user:
@@ -818,6 +985,10 @@ def user_role_update_api(request, pk):
     new_role = payload.get("role")
     if new_role not in [UserProfile.Role.SUPERADMIN, UserProfile.Role.ADMIN, UserProfile.Role.USER]:
         return JsonResponse({"detail": "無效的角色選項。"}, status=400)
+
+    # 除 admin 除外保護：不可降級 admin
+    if (target_user.username.lower() == 'admin' or target_user.is_superuser) and new_role != UserProfile.Role.SUPERADMIN:
+        return JsonResponse({"detail": "系統核心管理者 (admin) 受保護，不可變更為非最高管理者角色。"}, status=400)
 
     try:
         with transaction.atomic():

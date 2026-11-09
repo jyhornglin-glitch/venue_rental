@@ -1130,6 +1130,52 @@
     </div>
   </div>
 
+  <!-- 編輯人員 Modal (最高管理者專屬，除 admin 核心保護除外) -->
+  <div id="editUserModal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 style="margin-bottom: 16px;">✏️ 編輯人員資料</h3>
+      <form id="editUserForm" onsubmit="handleEditUserSubmit(event)">
+        <input type="hidden" id="editUserId">
+        <div class="form-group">
+          <label>帳號 (Username)</label>
+          <input type="text" id="editUsername" class="form-control" required>
+          <small id="editUsernameHint" style="display:none; color:#dc2626; font-size:0.8rem; margin-top:4px;">🔒 系統核心管理者 (admin) 帳號受保護，不可變更帳號名稱。</small>
+        </div>
+        <div class="form-group">
+          <label>身份角色</label>
+          <select id="editRole" class="form-control" required>
+            <option value="USER">一般申請者 (師兄/師姊)</option>
+            <option value="ADMIN">管理者 (場地志工窗口)</option>
+            <option value="SUPERADMIN">最高管理者 (合心窗口)</option>
+          </select>
+          <small id="editRoleHint" style="display:none; color:#dc2626; font-size:0.8rem; margin-top:4px;">🔒 系統核心管理者 (admin) 受保護，不可降級角色。</small>
+        </div>
+        <div class="form-group">
+          <label>電子信箱 (Email)</label>
+          <input type="email" id="editEmail" class="form-control" placeholder="例: volunteer@tzuchi.org.tw">
+        </div>
+        <div class="form-group">
+          <label>聯絡電話 (Phone)</label>
+          <input type="text" id="editPhone" class="form-control" placeholder="例: 0912-345-678">
+        </div>
+        <div class="form-group">
+          <label>帳號狀態</label>
+          <select id="editIsActive" class="form-control">
+            <option value="true">✅ 正常啟用</option>
+            <option value="false">⛔ 停用帳號</option>
+          </select>
+          <small id="editIsActiveHint" style="display:none; color:#dc2626; font-size:0.8rem; margin-top:4px;">🔒 系統核心管理者 (admin) 受保護，不可停用。</small>
+        </div>
+        <div class="form-group">
+          <label>重設新密碼 (若無須變更請留空)</label>
+          <input type="password" id="editPassword" class="form-control" placeholder="若欲變更請輸入至少 4 碼新密碼">
+        </div>
+        <button type="submit" id="editUserSubmitBtn" class="btn-submit" style="margin-top: 14px;">確認儲存變更</button>
+        <button type="button" class="btn-secondary" style="width: 100%; margin-top: 8px;" onclick="closeEditUserModal()">取消</button>
+      </form>
+    </div>
+  </div>
+
   <!-- 場地 新增/編輯 Modal (ACID 操作) -->
   <div id="venueModal" class="modal-overlay">
     <div class="modal-card">
@@ -2296,29 +2342,38 @@
     function renderUserRow(u, icon, avatarClass) {
       const badgeClass = u.role === 'SUPERADMIN' ? 'badge-role-superadmin' : (u.role === 'ADMIN' ? 'badge-role-admin' : 'badge-role-user');
       const roleText = u.role === 'SUPERADMIN' ? '最高管理 (合心)' : (u.role === 'ADMIN' ? '管理者 (窗口)' : '一般申請者');
+      const isAdminProtected = (u.username.toLowerCase() === 'admin' || u.is_admin_protected);
 
       return `
         <div class="user-row-card">
           <div class="user-row-main">
             <div class="user-avatar-badge ${avatarClass}">${icon}</div>
             <div class="user-meta">
-              <div class="user-primary-line">
+              <div class="user-primary-line" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 <span class="user-name">${escapeHtml(u.username)} 師兄/師姊</span>
                 <span class="badge ${badgeClass}">${roleText}</span>
+                ${isAdminProtected ? `<span class="badge" style="background:#fee2e2; color:#991b1b; border:1px solid #fecaca; font-weight:600;">🔒 核心除外保護 (不可刪除)</span>` : ''}
+                ${!u.is_active ? `<span class="badge" style="background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;">已停用</span>` : ''}
               </div>
-              <div class="user-secondary-line">
+              <div class="user-secondary-line" style="display:flex; gap:12px; flex-wrap:wrap; font-size:0.84rem; color:var(--text-muted); margin-top:4px;">
                 <span>✉️ ${escapeHtml(u.email || '未填寫信箱')}</span>
+                <span>📞 ${escapeHtml(u.phone || '未填寫電話')}</span>
                 <span>📅 加入：${formatDateTime(u.date_joined)}</span>
               </div>
             </div>
           </div>
           ${currentUser.is_superadmin ? `
-            <div class="user-row-actions">
-              <label style="font-size:0.84rem; font-weight:600; color:var(--text-muted); white-space:nowrap;">調整角色：</label>
-              <select class="user-role-select" onchange="changeUserRole(${u.id}, this.value)">
-                <option value="USER" ${u.role === 'USER' ? 'selected' : ''}>🌸 一般申請者 (師兄/師姊)</option>
-                <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>🛡️ 管理者 (場地與審核)</option>
-                <option value="SUPERADMIN" ${u.role === 'SUPERADMIN' ? 'selected' : ''}>👑 最高管理者 (合心)</option>
+            <div class="user-row-actions" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <button type="button" class="action-btn btn-edit" style="min-height:32px; padding:0 10px; font-size:0.82rem;" onclick="openEditUserModal(${u.id})">✏️ 編輯</button>
+              ${isAdminProtected ? `
+                <button type="button" class="action-btn btn-secondary" disabled style="opacity:0.45; cursor:not-allowed; min-height:32px; padding:0 10px; font-size:0.82rem;" title="系統核心 admin 帳號受保護，除外不可刪除">🔒 核心保護</button>
+              ` : `
+                <button type="button" class="action-btn btn-delete" style="min-height:32px; padding:0 10px; font-size:0.82rem;" onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}')">🗑️ 刪除</button>
+              `}
+              <select class="user-role-select" style="padding:5px 8px; font-size:0.82rem;" ${isAdminProtected ? 'disabled title="核心 admin 帳號不可調整角色"' : ''} onchange="changeUserRole(${u.id}, this.value)">
+                <option value="USER" ${u.role === 'USER' ? 'selected' : ''}>🌸 一般申請者</option>
+                <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>🛡️ 管理者</option>
+                <option value="SUPERADMIN" ${u.role === 'SUPERADMIN' ? 'selected' : ''}>👑 最高管理</option>
               </select>
             </div>
           ` : ''}
@@ -2341,9 +2396,117 @@
           renderUsersView();
         } else {
           alert(`❌ ${data.detail || '變更失敗'}`);
+          loadUsers();
         }
       } catch (err) {
         alert('網路錯誤');
+      }
+    }
+
+    function openEditUserModal(userId) {
+      const u = allLoadedUsers.find(x => x.id === userId);
+      if (!u) return;
+
+      const isAdminProtected = (u.username.toLowerCase() === 'admin' || u.is_admin_protected);
+
+      document.getElementById('editUserId').value = u.id;
+      const usernameInput = document.getElementById('editUsername');
+      usernameInput.value = u.username;
+      usernameInput.disabled = isAdminProtected;
+      document.getElementById('editUsernameHint').style.display = isAdminProtected ? 'block' : 'none';
+
+      const roleInput = document.getElementById('editRole');
+      roleInput.value = u.role;
+      roleInput.disabled = isAdminProtected;
+      document.getElementById('editRoleHint').style.display = isAdminProtected ? 'block' : 'none';
+
+      document.getElementById('editEmail').value = u.email || '';
+      document.getElementById('editPhone').value = u.phone || '';
+
+      const activeInput = document.getElementById('editIsActive');
+      activeInput.value = u.is_active ? 'true' : 'false';
+      activeInput.disabled = isAdminProtected;
+      document.getElementById('editIsActiveHint').style.display = isAdminProtected ? 'block' : 'none';
+
+      document.getElementById('editPassword').value = '';
+
+      document.getElementById('editUserModal').style.display = 'flex';
+    }
+
+    function closeEditUserModal() {
+      document.getElementById('editUserModal').style.display = 'none';
+    }
+
+    async function handleEditUserSubmit(e) {
+      e.preventDefault();
+      const userId = document.getElementById('editUserId').value;
+      const u = allLoadedUsers.find(x => x.id == userId);
+      const isAdminProtected = u ? (u.username.toLowerCase() === 'admin' || u.is_admin_protected) : false;
+
+      const submitBtn = document.getElementById('editUserSubmitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '更新處理中...';
+
+      const payload = {
+        email: document.getElementById('editEmail').value.trim(),
+        phone: document.getElementById('editPhone').value.trim()
+      };
+
+      if (!isAdminProtected) {
+        payload.username = document.getElementById('editUsername').value.trim();
+        payload.role = document.getElementById('editRole').value;
+        payload.is_active = document.getElementById('editIsActive').value === 'true';
+      }
+
+      const pwd = document.getElementById('editPassword').value.trim();
+      if (pwd) {
+        payload.password = pwd;
+      }
+
+      try {
+        const res = await fetch(`/api/users/${userId}/`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showAlert(data.message || '人員資料已成功更新！');
+          closeEditUserModal();
+          loadUsers();
+        } else {
+          alert(`❌ ${data.detail || '更新失敗'}`);
+        }
+      } catch (err) {
+        alert('網路連線失敗，請檢查伺服器狀態');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '確認儲存變更';
+      }
+    }
+
+    async function confirmDeleteUser(userId, username) {
+      if (username.toLowerCase() === 'admin') {
+        alert('❌ 系統核心管理者 (admin) 受保護，除外不可進行刪除操作。');
+        return;
+      }
+
+      const confirmed = confirm(`⚠️ 確定要刪除志工人員「${username}」嗎？\n\n此操作將一併移除該人員的所有權限與相關紀錄，且操作後無法復原。`);
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch(`/api/users/${userId}/`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showAlert(data.detail || '人員已成功自系統刪除！');
+          loadUsers();
+        } else {
+          alert(`❌ ${data.detail || '刪除失敗'}`);
+        }
+      } catch (err) {
+        alert('網路錯誤，刪除操作失敗');
       }
     }
 

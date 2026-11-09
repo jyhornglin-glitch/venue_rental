@@ -216,6 +216,128 @@ class FullSystemIntegrationTests(TestCase):
         )
         self.assertEqual(res_dup.status_code, 400)
 
+        # 5. 禁止重複建立保留核心帳號 admin -> 400
+        res_admin_dup = self.client.post(
+            '/api/users/',
+            data=json.dumps({
+                "username": "admin",
+                "password": "password123",
+                "role": UserProfile.Role.SUPERADMIN
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(res_admin_dup.status_code, 400)
+
+    def test_user_crud_and_admin_protection(self):
+        """測試人員 CRUD 操作，以及 admin 核心帳號受除外保護規則"""
+        # 建立系統核心管理者 admin
+        admin_root = User.objects.create_superuser(
+            username='admin',
+            email='admin@example.com',
+            password='rootpassword'
+        )
+        # 建立待測試志工人員
+        test_volunteer = User.objects.create_user(
+            username='volunteer_lin',
+            email='lin@example.com',
+            password='linpassword'
+        )
+        test_volunteer.profile.phone = '0988-123-456'
+        test_volunteer.profile.save()
+
+        # 1. READ (GET /api/users/<pk>/)
+        # 1.1 一般申請者無權查看他人詳細資料 -> 403
+        self.client.force_login(self.applicant)
+        res_get_other = self.client.get(f'/api/users/{test_volunteer.id}/')
+        self.assertEqual(res_get_other.status_code, 403)
+
+        # 1.2 一般申請者可查看自身詳細資料 -> 200
+        res_get_self = self.client.get(f'/api/users/{self.applicant.id}/')
+        self.assertEqual(res_get_self.status_code, 200)
+        self.assertEqual(res_get_self.json()['username'], 'applicant')
+
+        # 1.3 管理者可查看任何人員詳細資料 -> 200
+        self.client.force_login(self.admin)
+        res_get_admin = self.client.get(f'/api/users/{test_volunteer.id}/')
+        self.assertEqual(res_get_admin.status_code, 200)
+        self.assertEqual(res_get_admin.json()['phone'], '0988-123-456')
+
+        # 2. UPDATE (PUT/PATCH /api/users/<pk>/)
+        # 2.1 非最高管理者無權編輯人員資料 -> 403
+        res_patch_fail = self.client.patch(
+            f'/api/users/{test_volunteer.id}/',
+            data=json.dumps({"email": "updated@example.com"}),
+            content_type='application/json'
+        )
+        self.assertEqual(res_patch_fail.status_code, 403)
+
+        # 2.2 最高管理者更新一般人員資料 -> 200
+        self.client.force_login(self.superadmin)
+        res_patch_ok = self.client.patch(
+            f'/api/users/{test_volunteer.id}/',
+            data=json.dumps({
+                "username": "volunteer_lin_updated",
+                "email": "lin_new@tzuchi.org.tw",
+                "phone": "0911-222-333",
+                "password": "newsecretpassword",
+                "role": UserProfile.Role.ADMIN,
+                "is_active": True
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(res_patch_ok.status_code, 200)
+        test_volunteer.refresh_from_db()
+        test_volunteer.profile.refresh_from_db()
+        self.assertEqual(test_volunteer.username, "volunteer_lin_updated")
+        self.assertEqual(test_volunteer.email, "lin_new@tzuchi.org.tw")
+        self.assertEqual(test_volunteer.profile.phone, "0911-222-333")
+        self.assertEqual(test_volunteer.profile.role, UserProfile.Role.ADMIN)
+
+        # 2.3 admin 帳號除外保護：不可更名 -> 400
+        res_admin_rename = self.client.patch(
+            f'/api/users/{admin_root.id}/',
+            data=json.dumps({"username": "renamed_admin"}),
+            content_type='application/json'
+        )
+        self.assertEqual(res_admin_rename.status_code, 400)
+
+        # 2.4 admin 帳號除外保護：不可停用 -> 400
+        res_admin_deact = self.client.patch(
+            f'/api/users/{admin_root.id}/',
+            data=json.dumps({"is_active": False}),
+            content_type='application/json'
+        )
+        self.assertEqual(res_admin_deact.status_code, 400)
+
+        # 2.5 admin 帳號除外保護：不可降級角色 -> 400
+        res_admin_demote = self.client.patch(
+            f'/api/users/{admin_root.id}/',
+            data=json.dumps({"role": UserProfile.Role.USER}),
+            content_type='application/json'
+        )
+        self.assertEqual(res_admin_demote.status_code, 400)
+
+        # 3. DELETE (DELETE /api/users/<pk>/)
+        # 3.1 非最高管理者無權刪除人員 -> 403
+        self.client.force_login(self.admin)
+        res_del_perm = self.client.delete(f'/api/users/{test_volunteer.id}/')
+        self.assertEqual(res_del_perm.status_code, 403)
+
+        # 3.2 最高管理者不可刪除 admin 核心帳號（除外保護） -> 400
+        self.client.force_login(self.superadmin)
+        res_del_admin = self.client.delete(f'/api/users/{admin_root.id}/')
+        self.assertEqual(res_del_admin.status_code, 400)
+        self.assertTrue(User.objects.filter(id=admin_root.id).exists())
+
+        # 3.3 最高管理者不可刪除當前登入之自身帳號 -> 400
+        res_del_self = self.client.delete(f'/api/users/{self.superadmin.id}/')
+        self.assertEqual(res_del_self.status_code, 400)
+
+        # 3.4 正常刪除一般人員 -> 200
+        res_del_ok = self.client.delete(f'/api/users/{test_volunteer.id}/')
+        self.assertEqual(res_del_ok.status_code, 200)
+        self.assertFalse(User.objects.filter(id=test_volunteer.id).exists())
+
     def test_venue_time_limited_closure(self):
         now = timezone.now()
         closure_start = now + timedelta(days=2, hours=10)
