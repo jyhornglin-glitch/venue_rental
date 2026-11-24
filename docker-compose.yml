@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  venue_web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: venue-rental:latest
+    container_name: venue_rental_app
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=False
+      - SQLITE_PATH=/app/data/db.sqlite3
+    env_file:
+      - .env
+    volumes:
+      # 持久化保存 SQLite 資料庫與上傳資源
+      - ./data:/app/data
+      # 持久化靜態資源 (可選)
+      - ./staticfiles:/app/staticfiles
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -66,17 +66,36 @@ python manage.py runserver
 
 開啟瀏覽器前往 [http://127.0.0.1:8000](http://127.0.0.1:8000) 即可開始使用。
 
+## 🌐 Synology NAS 生產環境部署
+
+本專案提供完整的 Synology NAS 部署設定與自動化腳本：
+- **Container Manager (Docker Compose)**：推薦方式，環境隔離、開箱即用。
+- **一鍵部署腳本**：提供 `deploy_nas.sh` 快速自動配置。
+- **詳細圖文與設定說明**：請參閱完整指引文件 [SYNOLOGY_DEPLOYMENT.md](file:///Users/franklin/Documents/場地租借/SYNOLOGY_DEPLOYMENT.md)。
+
+快速啟動（SSH 連線至 NAS 後）：
+```bash
+git clone https://github.com/jyhornglin-glitch/venue_rental.git
+cd venue_rental
+bash deploy_nas.sh
+```
+
 ## 📁 專案結構
 
 ```
 venue_rental/
-├── config/             # Django 專案全域設定與 URL 路由
-├── reservations/       # 場地預約核心應用 (Models, Views, URLs)
-├── static/             # 靜態資源 (CSS, JS, 圖片)
-├── templates/          # 前端 HTML 視圖模板
-├── .env.example        # 環境變數範例檔
-├── requirements.txt    # Python 依賴清單
-└── manage.py           # Django CLI 工具
+├── config/                  # Django 專案全域設定與 URL 路由
+├── reservations/            # 場地預約核心應用 (Models, Views, URLs)
+├── static/                  # 靜態資源 (CSS, JS, 圖片)
+├── templates/               # 前端 HTML 視圖模板
+├── .env.example             # 環境變數範例檔
+├── requirements.txt         # Python 依賴清單
+├── Dockerfile               # 容器化建置設定
+├── docker-compose.yml       # Docker Compose 服務編排設定
+├── entrypoint.sh            # 容器初始化啟動入口腳本
+├── deploy_nas.sh            # Synology NAS 一鍵部署腳本
+├── SYNOLOGY_DEPLOYMENT.md   # NAS 完整部署與反向代理操作指引
+└── manage.py                # Django CLI 工具
 ```
 
 ## 📄 授權條款

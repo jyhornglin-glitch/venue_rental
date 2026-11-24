@@ -6,4 +6,5 @@ db.sqlite3
 .DS_Store
 *.log
 staticfiles/
+data/
 
